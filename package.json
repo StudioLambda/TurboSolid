@@ -1,0 +1,50 @@
+{
+  "version": "0.1.0",
+  "license": "MIT",
+  "name": "turbo-solid",
+  "description": "Lightweight asynchronous data management for solid",
+  "info": "A way to manage async data in solid applications. Also includes a cache and an event system. Supports a ton of features and it's build on top of createResource.",
+  "keywords": [
+    "solidhack",
+    "best_ecosystem"
+  ],
+  "repository": {
+    "url": "https://github.com/StudioLambda/TurboSolid"
+  },
+  "author": {
+    "name": "Erik C. Forés",
+    "email": "soc@erik.cat",
+    "url": "https://erik.cat"
+  },
+  "types": "./dist/turbo-solid.d.ts",
+  "main": "./dist/turbo-solid.umd.js",
+  "module": "./dist/turbo-solid.es.js",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": "./dist/turbo-solid.es.js",
+      "require": "./dist/turbo-solid.umd.js"
+    }
+  },
+  "files": [
+    "dist",
+    "package.json"
+  ],
+  "scripts": {
+    "start": "vite",
+    "dev": "vite --force",
+    "build": "vite build && tsc --skipLibCheck",
+    "serve": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^4.6.2",
+    "vite": "^2.8.6",
+    "vite-plugin-solid": "^2.2.6"
+  },
+  "peerDependencies": {
+    "solid-js": "^1.3.12"
+  },
+  "dependencies": {
+    "turbo-query": "^1.2.1"
+  }
+}
