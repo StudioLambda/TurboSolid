@@ -19,7 +19,7 @@ interface Props {
 
 const TurboPost: Component<Props> = (props) => {
   const [post, { refetch }] = createTurboResource<Post>(
-    `https://jsonplaceholder.typicode.com/posts/${props.id}`
+    () => `https://jsonplaceholder.typicode.com/posts/${props.id}`
   )
   const [user] = createTurboResource<User>(
     () => `https://jsonplaceholder.typicode.com/users/${post()!.userId}`
@@ -28,12 +28,14 @@ const TurboPost: Component<Props> = (props) => {
   return (
     <div>
       <Show when={post()}>
-        <Show when={user()}>
-          <p>{user()!.name}</p>
-        </Show>
-        <h3>{post()!.title}</h3>
-        <p>{post()!.body}</p>
-        <button onClick={() => refetch()}>Refresh</button>
+        {(post) => (
+          <>
+            <Show when={user()}>{(user) => <p>{user.name}</p>}</Show>
+            <h3>{post.title}</h3>
+            <p>{post.body}</p>
+            <button onClick={() => refetch()}>Refresh</button>
+          </>
+        )}
       </Show>
     </div>
   )

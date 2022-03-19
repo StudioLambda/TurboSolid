@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "name": "turbo-solid",
   "description": "Lightweight asynchronous data management for solid",
@@ -34,7 +34,8 @@
     "start": "vite",
     "dev": "vite --force",
     "build": "vite build && tsc --skipLibCheck",
-    "serve": "vite preview"
+    "serve": "vite preview",
+    "prepack": "npm run build"
   },
   "devDependencies": {
     "typescript": "^4.6.2",

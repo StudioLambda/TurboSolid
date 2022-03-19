@@ -8,7 +8,7 @@ interface Post {
 }
 
 const Posts: Component = () => {
-  const [posts] = createTurboResource<Post[]>('https://jsonplaceholder.typicode.com/posts', {
+  const [posts] = createTurboResource<Post[]>(() => 'https://jsonplaceholder.typicode.com/posts', {
     transition: true,
   })
   const [opened, setOpened] = createSignal<number | undefined>(1)

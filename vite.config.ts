@@ -12,9 +12,9 @@ export default defineConfig({
       fileName: 'turbo-solid',
     },
     rollupOptions: {
-      external: ['solid-js'],
+      external: ['solid-js', 'turbo-query'],
       output: {
-        globals: { 'solid-js': 'SolidJS' },
+        globals: { 'solid-js': 'SolidJS', 'turbo-query': 'TurboQuery' },
       },
     },
   },

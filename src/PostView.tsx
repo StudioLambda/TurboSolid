@@ -32,13 +32,15 @@ const Post: Component<{ id: number }> = (props) => {
 
   return (
     <Show when={post()}>
-      <div>
-        <h1>{post()!.title}</h1>
-        <Suspense fallback={<div>Loading published information...</div>}>
-          <PublishedBy userId={post()!.userId} />
-        </Suspense>
-        <p>{post()!.body}</p>
-      </div>
+      {(post) => (
+        <div>
+          <h1>{post.title}</h1>
+          <Suspense fallback={<div>Loading published information...</div>}>
+            <PublishedBy userId={post.userId} />
+          </Suspense>
+          <p>{post.body}</p>
+        </div>
+      )}
     </Show>
   )
 }

@@ -38,11 +38,7 @@ const PublishedBy: Component<{ userId: number }> = (props) => {
     () => `https://jsonplaceholder.typicode.com/users/${props.userId}`
   )
 
-  return (
-    <Show when={user()}>
-      <h4>Published by {user()!.name}</h4>
-    </Show>
-  )
+  return <Show when={user()}>{(user) => <h4>Published by {user.name}</h4>}</Show>
 }
 
 interface Post {
@@ -59,13 +55,15 @@ const Post: Component<{ id: number }> = (props) => {
 
   return (
     <Show when={post()}>
-      <div>
-        <h1>{post()!.title}</h1>
-        <Suspense fallback={<div>Loading published information...</div>}>
-          <PublishedBy userId={post()!.userId} />
-        </Suspense>
-        <p>{post()!.body}</p>
-      </div>
+      {(post) => (
+        <div>
+          <h1>{post.title}</h1>
+          <Suspense fallback={<div>Loading published information...</div>}>
+            <PublishedBy userId={post.userId} />
+          </Suspense>
+          <p>{post.body}</p>
+        </div>
+      )}
     </Show>
   )
 }

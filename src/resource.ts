@@ -1,6 +1,7 @@
 import {
   TurboQueryOptions,
   TurboQuery,
+  TurboMutateValue,
   query as turboQuery,
   subscribe as turboSubscribe,
   mutate as turboMutate,
@@ -44,13 +45,14 @@ export interface TurboSolidResourceActions<T> {
    * Performs a local mutation of the data.
    * This also broadcasts it to all other key listeners.
    */
-  mutate(value: T | ((old: T) => T)): void
+  mutate(value: TurboMutateValue<T>): void
 
   /**
    * Performs a refetching of the resource.
    * This also broadcasts it to all other key listeners.
+   * Returns undefined if it's unable to refetch.
    */
-  refetch(): void
+  refetch(): Promise<T | undefined>
 
   /**
    * Unsibscribes the event listeners. If createResource was
@@ -83,12 +85,12 @@ export const TurboContext = createContext<TurboSolidResourceOptions>()
 /**
  * The type of a turbo solid key.
  */
-export type TurboSolidKeyType = string | false | null
+export type TurboSolidKeyType = string | false | null | undefined
 
 /**
  * The type of a turbo solid key. Accepting a resolver function.
  */
-export type TurboSolidKey = TurboSolidKeyType | (() => TurboSolidKeyType)
+export type TurboSolidKey = () => TurboSolidKeyType
 
 /**
  * Creates a new turbo resource with the given key
@@ -115,14 +117,11 @@ export function createTurboResource<T = any>(
    * Creates the memorized key.
    */
   const keyMemo = createMemo<TurboSolidKeyType>(function () {
-    if (typeof key === 'function') {
-      try {
-        return key()
-      } catch {
-        return null
-      }
+    try {
+      return key()
+    } catch {
+      return null
     }
-    return key
   })
 
   const contextOptions = useContext<TurboSolidResourceOptions | undefined>(TurboContext)
@@ -187,13 +186,15 @@ export function createTurboResource<T = any>(
   /**
    * Performs a refetching of the resource.
    * This also broadcasts it to all other key listeners.
+   * Returns undefined if it's unable to refetch.
    */
-  function localRefetch(): void {
+  async function localRefetch(): Promise<T | undefined> {
     const key = keyMemo()
     if (!key) return
     const promise = query<T>(key, { stale: false, ...contextOptions, ...options })
     if (transition) transition(() => actions.refetch(promise))
     else actions.refetch(promise)
+    return await promise
   }
 
   /**
