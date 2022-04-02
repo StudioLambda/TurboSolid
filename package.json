@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "MIT",
   "name": "turbo-solid",
   "description": "Lightweight asynchronous data management for solid",
@@ -46,6 +46,6 @@
     "solid-js": "^1.3.12"
   },
   "dependencies": {
-    "turbo-query": "^1.4.0"
+    "turbo-query": "^1.5.0"
   }
 }
