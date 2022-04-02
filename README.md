@@ -22,7 +22,7 @@ npm i turbo-solid
 - Manual refetching.
 - Automatic refetching upon key change.
 - Data synchronization (using keys).
-- Keys can be strings or functions (functions can throw or return false/null - and must be used for dependent fetching).
+- Keys can throw or return false/null if data is not yet ready.
 - All available options from [Turbo Query](https://github.com/StudioLambda/TurboQuery).
 
 ## Documentation
