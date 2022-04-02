@@ -26,7 +26,7 @@ const PublishedBy: Component<{ userId: number }> = (props) => {
 }
 
 const Post: Component<{ id: number }> = (props) => {
-  const [post] = createTurboResource<Post>(
+  const [post, { isRefetching }] = createTurboResource<Post>(
     () => `https://jsonplaceholder.typicode.com/posts/${props.id}`
   )
 
@@ -34,6 +34,9 @@ const Post: Component<{ id: number }> = (props) => {
     <Show when={post()}>
       {(post) => (
         <div>
+          <Show when={isRefetching()}>
+            <div>Refetching...</div>
+          </Show>
           <h1>{post.title}</h1>
           <Suspense fallback={<div>Loading published information...</div>}>
             <PublishedBy userId={post.userId} />
