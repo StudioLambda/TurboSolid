@@ -46,6 +46,6 @@
     "solid-js": "^1.3.12"
   },
   "dependencies": {
-    "turbo-query": "^1.2.1"
+    "turbo-query": "^1.4.0"
   }
 }

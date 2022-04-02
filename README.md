@@ -10,9 +10,12 @@ npm i turbo-solid
 
 ## Features
 
-- 2KB (gzip)
+- 2.5KB (gzip)
 - Same API as `createResource`.
+- Typescript support out of the box.
 - `<Suspense>` support.
+- On connect refetching.
+- On focus refetching.
 - Dependent fetching using a function as key.
 - Request deduping.
 - Optimistic mutation.
@@ -22,7 +25,73 @@ npm i turbo-solid
 - Keys can be strings or functions (functions can throw or return false/null - and must be used for dependent fetching).
 - All available options from [Turbo Query](https://github.com/StudioLambda/TurboQuery).
 
-## Usage
+## Documentation
+
+While this doucment highlights some basics, it's recommended to read the [Documentation](https://erik.cat/post/turbo-solid-lightweight-asynchronous-data-management-for-solid)
+
+## Walk-Through
+
+Turbo Solid uses [Turbo Query](https://github.com/StudioLambda/TurboQuery) under the hood,
+and therefore it needs to be configured first. You'll need to supply a turbo query instance
+to turbo solid. You can provide this configuration by using the context API. You can also
+provide an existing turbo query instance if you already had one created, the options will be
+passed to its query function on demand.
+
+```tsx
+import { TurboContext } from 'turbo-solid'
+
+const App = () => {
+  const configuration = {
+    // Available configuration options:
+    // https://erik.cat/post/turbo-solid-lightweight-asynchronous-data-management-for-solid#configuration
+  }
+
+  return (
+    <TurboContext.Provide value={configuration}>
+      {/* You probably want Suspense somewhere down in MyApp */}
+      {/* This is just a demo to show its support */}
+      <Suspense>
+        <MyApp />
+      </Suspense>
+    </TurboContext.Provide>
+  )
+}
+```
+
+It's also possible not to use the context API and instead rely on the global turbo query instance
+exposed on `turbo-solid`. You can therefore also configure the default instance if needed:
+
+```tsx
+import { configure } from 'turbo-solid'
+
+configure({
+  // Available configuration options:
+  // https://erik.cat/post/turbo-solid-lightweight-asynchronous-data-management-for-solid#configuration
+})
+```
+
+After the configuration has been setup, you can already start using turbo solid. To begin using it,
+you can import `createTurboResource` from `turbo-solid`. The API is very similar to the existing
+`createResource` from `solid-js`.
+
+```tsx
+import { For } from 'solid-js'
+import { createTurboResource } from 'turbo-solid'
+
+interface Post {
+  title: string
+}
+
+const Posts = () => {
+  const [post] = createTurboResource<Post>(() => 'https://jsonplaceholder.typicode.com/posts')
+
+  return <For each={posts() ?? []}>{(post) => <div>{post.title}</div>}</For>
+}
+```
+
+Awesome! You can learn more about what controls and features you gain over `createResource` on the [Documentation](https://erik.cat/post/turbo-solid-lightweight-asynchronous-data-management-for-solid)
+
+## Full Example
 
 ```tsx
 import { Component, Show } from 'solid-js'

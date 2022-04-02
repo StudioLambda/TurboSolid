@@ -18,6 +18,8 @@ import {
   onCleanup,
   createMemo,
   createEffect,
+  createSignal,
+  Accessor,
 } from 'solid-js'
 
 /**
@@ -35,6 +37,25 @@ export interface TurboSolidResourceOptions extends TurboQueryOptions {
    * Determines a transition function to perform async operations.
    */
   transition?: boolean | ((fn: () => void) => Promise<void>)
+
+  /**
+   * Determines if it should refetch keys when
+   * the window regains focus. You can also
+   * set the desired `focusInterval`.
+   */
+  refetchOnFocus?: boolean
+
+  /**
+   * Determines if it should refetch keys when
+   * the window regains focus.
+   */
+  refetchOnConnect?: boolean
+
+  /**
+   * Determines a throttle interval for the
+   * `refetchOnFocus`. Defaults to 5000 ms.
+   */
+  focusInterval?: number
 }
 
 /**
@@ -70,6 +91,12 @@ export interface TurboSolidResourceActions<T> {
    * Aborts the current resource key.
    */
   abort(reason?: any): void
+
+  /**
+   * Determines if a refetch is currently
+   * running.
+   */
+  isRefetching: Accessor<boolean>
 }
 
 /**
@@ -107,6 +134,9 @@ export function createTurboResource<T = any>(
   function getTransition(
     t: TurboSolidResourceOptions['transition']
   ): undefined | ((fn: () => void) => Promise<void>) {
+    if (t === undefined) {
+      return startTransition
+    }
     if (typeof t === 'boolean') {
       return t ? startTransition : undefined
     }
@@ -124,6 +154,7 @@ export function createTurboResource<T = any>(
     }
   })
 
+  const [isRefetching, setIsRefetching] = createSignal(false)
   const contextOptions = useContext<TurboSolidResourceOptions | undefined>(TurboContext)
   const subscribe = options?.turbo?.subscribe ?? contextOptions?.turbo?.subscribe ?? turboSubscribe
   const query = options?.turbo?.query ?? contextOptions?.turbo?.query ?? turboQuery
@@ -131,6 +162,9 @@ export function createTurboResource<T = any>(
   const forget = options?.turbo?.forget ?? contextOptions?.turbo?.forget ?? turboForget
   const abort = options?.turbo?.abort ?? contextOptions?.turbo?.abort ?? turboAbort
   const transition = getTransition(options?.transition ?? contextOptions?.transition)
+  const refetchOnFocus = options?.refetchOnFocus ?? contextOptions?.refetchOnFocus ?? true
+  const refetchOnConnect = options?.refetchOnConnect ?? contextOptions?.refetchOnConnect ?? true
+  const focusInterval = options?.focusInterval ?? contextOptions?.focusInterval ?? 5000
 
   /**
    * Creates the underlying async resource.
@@ -139,38 +173,6 @@ export function createTurboResource<T = any>(
     return refetching instanceof Promise
       ? (refetching as Promise<T>)
       : query<T>(k, { stale: true, ...contextOptions, ...options })
-  })
-
-  let unsubscribeMutations: undefined | (() => void) = undefined
-  let unsubscribeRefetching: undefined | (() => void) = undefined
-
-  createEffect(() => {
-    const key = keyMemo()
-    if (!key) return
-
-    /**
-     * Subscribes to mutations in the key.
-     */
-    unsubscribeMutations = subscribe<T>(key, 'mutated', function (item) {
-      if (transition) transition(() => actions.mutate(() => item))
-      else actions.mutate(() => item)
-    })
-
-    /**
-     * Subscribes to refetching on the key.
-     */
-    unsubscribeRefetching = subscribe<T>(key, 'refetching', function (promise) {
-      if (transition) transition(() => actions.refetch(promise))
-      else actions.refetch(promise)
-    })
-
-    /**
-     * Unsubscribes the current listeners to avoid memory leaks.
-     */
-    onCleanup(function () {
-      unsubscribeMutations?.()
-      unsubscribeRefetching?.()
-    })
   })
 
   /**
@@ -197,6 +199,13 @@ export function createTurboResource<T = any>(
     return await promise
   }
 
+  let unsubscribeMutations: undefined | (() => void) = undefined
+  let unsubscribeRefetching: undefined | (() => void) = undefined
+  let unsubscribeFocusRefetch: undefined | (() => void) = undefined
+  let unsubscribeConnectRefetch: undefined | (() => void) = undefined
+  let unsubscribeResolved: undefined | (() => void) = undefined
+  let unsubscribeErrors: undefined | (() => void) = undefined
+
   /**
    * Unsibscribes the event listeners. If createResource was
    * used outside of a component, this method will need to be
@@ -205,7 +214,99 @@ export function createTurboResource<T = any>(
   function localUnsubscribe(): void {
     unsubscribeMutations?.()
     unsubscribeRefetching?.()
+    unsubscribeFocusRefetch?.()
+    unsubscribeConnectRefetch?.()
+    unsubscribeResolved?.()
+    unsubscribeErrors?.()
   }
+
+  createEffect(() => {
+    setIsRefetching(false)
+    const key = keyMemo()
+    if (!key) return
+
+    /**
+     * The onFocus function handler.
+     */
+    function onFocus(listener: () => void): () => void {
+      if (refetchOnFocus && typeof window !== 'undefined') {
+        let lastFocus: number | null = null
+        const rawHandler = () => {
+          const now = Date.now()
+          if (lastFocus === null || now - lastFocus > focusInterval) {
+            lastFocus = now
+            listener()
+          }
+        }
+        window.addEventListener('focus', rawHandler)
+        return () => window.removeEventListener('focus', rawHandler)
+      }
+      return () => {}
+    }
+
+    /**
+     * The onConnect function handler.
+     */
+    function onConnect(listener: () => void): () => void {
+      if (refetchOnConnect && typeof window !== 'undefined') {
+        window.addEventListener('online', listener)
+        return () => window.removeEventListener('online', listener)
+      }
+      return () => {}
+    }
+
+    /**
+     * Subscribes to mutations in the key.
+     */
+    unsubscribeMutations = subscribe<T>(key, 'mutated', function (item) {
+      if (transition) transition(() => actions.mutate(() => item))
+      else actions.mutate(() => item)
+    })
+
+    /**
+     * Subscribes to refetching on the key.
+     */
+    unsubscribeRefetching = subscribe<T>(key, 'refetching', function (promise) {
+      setIsRefetching(true)
+      if (transition) transition(() => actions.refetch(promise))
+      else actions.refetch(promise)
+    })
+
+    /**
+     * Subscribes to refetching on the key.
+     */
+    unsubscribeResolved = subscribe<T>(key, 'resolved', function () {
+      setIsRefetching(false)
+    })
+
+    /**
+     * Subscribe to errors.
+     */
+    unsubscribeErrors = subscribe<unknown>(key, 'error', function () {
+      setIsRefetching(false)
+    })
+
+    /**
+     * Subscribe to focus changes if needed.
+     */
+    unsubscribeFocusRefetch = onFocus(function () {
+      localRefetch()
+    })
+
+    /**
+     * Subscribe to network connect changes if needed.
+     */
+    unsubscribeConnectRefetch = onConnect(function () {
+      localRefetch()
+    })
+
+    /**
+     * Unsubscribes the current listeners to avoid memory leaks.
+     */
+    onCleanup(function () {
+      localUnsubscribe()
+    })
+  })
 
   /**
    * Forgets the current resource key.
@@ -233,6 +334,7 @@ export function createTurboResource<T = any>(
       unsubscribe: localUnsubscribe,
       forget: localForget,
       abort: localAbort,
+      isRefetching,
     },
   ]
 }
