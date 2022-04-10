@@ -7,6 +7,7 @@ import {
   mutate as turboMutate,
   forget as turboForget,
   abort as turboAbort,
+  expiration as turboExpiration,
 } from 'turbo-query'
 
 import {
@@ -20,6 +21,7 @@ import {
   createEffect,
   createSignal,
   Accessor,
+  on,
 } from 'solid-js'
 
 /**
@@ -31,31 +33,31 @@ export interface TurboSolidResourceOptions extends TurboQueryOptions {
    * neither in the resource nor the context, the default instance
    * will be used instead.
    */
-  turbo?: TurboQuery
+  readonly turbo?: TurboQuery
 
   /**
    * Determines a transition function to perform async operations.
    */
-  transition?: boolean | ((fn: () => void) => Promise<void>)
+  readonly transition?: boolean | ((fn: () => void) => Promise<void>)
 
   /**
    * Determines if it should refetch keys when
    * the window regains focus. You can also
    * set the desired `focusInterval`.
    */
-  refetchOnFocus?: boolean
+  readonly refetchOnFocus?: boolean
 
   /**
    * Determines if it should refetch keys when
    * the window regains focus.
    */
-  refetchOnConnect?: boolean
+  readonly refetchOnConnect?: boolean
 
   /**
    * Determines a throttle interval for the
    * `refetchOnFocus`. Defaults to 5000 ms.
    */
-  focusInterval?: number
+  readonly focusInterval?: number
 }
 
 /**
@@ -66,37 +68,72 @@ export interface TurboSolidResourceActions<T> {
    * Performs a local mutation of the data.
    * This also broadcasts it to all other key listeners.
    */
-  mutate(value: TurboMutateValue<T>): void
+  readonly mutate: (value: TurboMutateValue<T>) => void
 
   /**
    * Performs a refetching of the resource.
    * This also broadcasts it to all other key listeners.
    * Returns undefined if it's unable to refetch.
    */
-  refetch(): Promise<T | undefined>
+  readonly refetch: () => Promise<T | undefined>
 
   /**
    * Unsibscribes the event listeners. If createResource was
    * used outside of a component, this method will need to be
    * called manually when it's no longer needed.
    */
-  unsubscribe(): void
+  readonly unsubscribe: () => void
 
   /**
    * Forgets the current resource key.
    */
-  forget(): void
+  readonly forget: () => void
 
   /**
    * Aborts the current resource key.
    */
-  abort(reason?: any): void
+  readonly abort: (reason?: any) => void
 
   /**
    * Determines if a refetch is currently
    * running.
    */
-  isRefetching: Accessor<boolean>
+  readonly isRefetching: Accessor<boolean>
+
+  /**
+   * Determines the date of the last window focus.
+   * Useful to calculate how many time is left
+   * for the next available focus refetching.
+   */
+  readonly lastFocus: Accessor<Date>
+
+  /**
+   * Creates a signal that every given precision interval
+   * will determine if the current key is available
+   * to refetch via focus. and how many time need to pass till
+   * it's available to refetch by focus. This function helps creating
+   * the controlled sigal on demand rather than creating
+   * arbitrary signals ourselves just in case.
+   * Return value is [isAvailable, availableIn]
+   */
+  readonly createFocusAvailable: (precision: number) => [Accessor<boolean>, Accessor<number>]
+
+  /**
+   * Determines when the current key expires if
+   * it's currently in the cache.
+   */
+  readonly expiration: () => Date | undefined
+
+  /**
+   * Creates a signal that every given pricesion interval
+   * will determine if the current key is currently expired / stale
+   * and how many time needs to pass till its considered expired / stale.
+   * This function helps creating
+   * the controlled sigal on demand rather than creating
+   * arbitrary signals ourselves just in case.
+   * Return value is [isStale, staleIn]
+   */
+  readonly createStale: (precision: number) => [Accessor<boolean>, Accessor<number>]
 }
 
 /**
@@ -165,6 +202,8 @@ export function createTurboResource<T = any>(
   const refetchOnFocus = options?.refetchOnFocus ?? contextOptions?.refetchOnFocus ?? true
   const refetchOnConnect = options?.refetchOnConnect ?? contextOptions?.refetchOnConnect ?? true
   const focusInterval = options?.focusInterval ?? contextOptions?.focusInterval ?? 5000
+  const expiration =
+    options?.turbo?.expiration ?? contextOptions?.turbo?.expiration ?? turboExpiration
 
   /**
    * Creates the underlying async resource.
@@ -179,7 +218,7 @@ export function createTurboResource<T = any>(
    * Performs a local mutation of the data.
    * This also broadcasts it to all other key listeners.
    */
-  function localMutate(value: T): void {
+  function localMutate(value: TurboMutateValue<T>): void {
     const key = keyMemo()
     if (!key) return
     mutate<T>(key, value)
@@ -220,93 +259,188 @@ export function createTurboResource<T = any>(
     unsubscribeErrors?.()
   }
 
-  createEffect(() => {
-    setIsRefetching(false)
-    const key = keyMemo()
-    if (!key) return
+  const [lastFocus, setLastFocus] = createSignal<Date>(new Date())
 
-    /**
-     * The onFocus function handler.
-     */
-    function onFocus(listener: () => void): () => void {
-      if (refetchOnFocus && typeof window !== 'undefined') {
-        let lastFocus: number | null = null
-        const rawHandler = () => {
-          const now = Date.now()
-          if (lastFocus === null || now - lastFocus > focusInterval) {
-            lastFocus = now
-            listener()
-          }
+  /**
+   * The onFocus function handler.
+   */
+  function onFocus(listener: () => void): () => void {
+    if (refetchOnFocus && typeof window !== 'undefined') {
+      const rawHandler = () => {
+        const last = lastFocus()
+        const now = new Date()
+
+        if (now.getTime() - last.getTime() > focusInterval) {
+          setLastFocus(new Date())
+          listener()
         }
-        window.addEventListener('focus', rawHandler)
-        return () => window.removeEventListener('focus', rawHandler)
       }
-      return () => {}
+      window.addEventListener('focus', rawHandler)
+      return () => window.removeEventListener('focus', rawHandler)
     }
+    return () => {}
+  }
 
-    /**
-     * The onConnect function handler.
-     */
-    function onConnect(listener: () => void): () => void {
-      if (refetchOnConnect && typeof window !== 'undefined') {
-        window.addEventListener('online', listener)
-        return () => window.removeEventListener('online', listener)
-      }
-      return () => {}
+  /**
+   * The onConnect function handler.
+   */
+  function onConnect(listener: () => void): () => void {
+    if (refetchOnConnect && typeof window !== 'undefined') {
+      window.addEventListener('online', listener)
+      return () => window.removeEventListener('online', listener)
     }
+    return () => {}
+  }
 
-    /**
-     * Subscribes to mutations in the key.
-     */
-    unsubscribeMutations = subscribe<T>(key, 'mutated', function (item) {
-      if (transition) transition(() => actions.mutate(() => item))
-      else actions.mutate(() => item)
-    })
+  /**
+   * Composable isFocusAvailable signal.
+   */
+  function createFocusAvailable(precision: number): [Accessor<boolean>, Accessor<number>] {
+    const [isAvailable, setIsAvailable] = createSignal(
+      new Date().getTime() - lastFocus().getTime() > focusInterval
+    )
+    const [availableIn, setAvailableIn] = createSignal(focusInterval)
 
-    /**
-     * Subscribes to refetching on the key.
-     */
-    unsubscribeRefetching = subscribe<T>(key, 'refetching', function (promise) {
-      setIsRefetching(true)
-      if (transition) transition(() => actions.refetch(promise))
-      else actions.refetch(promise)
-    })
+    const interval = setInterval(function () {
+      const last = lastFocus()
+      const now = new Date()
+      const availability = focusInterval - (now.getTime() - last.getTime())
+      if (availability >= 0) setAvailableIn(availability)
+      else if (availability < 0 && availableIn() > 0) setAvailableIn(0)
+      setIsAvailable(now.getTime() - last.getTime() > focusInterval)
+    }, precision)
 
-    /**
-     * Subscribes to refetching on the key.
-     */
-    unsubscribeResolved = subscribe<T>(key, 'resolved', function () {
-      setIsRefetching(false)
-    })
-
-    /**
-     * Subscribe to errors.
-     */
-    unsubscribeErrors = subscribe<unknown>(key, 'error', function () {
-      setIsRefetching(false)
-    })
-
-    /**
-     * Subscribe to focus changes if needed.
-     */
-    unsubscribeFocusRefetch = onFocus(function () {
-      localRefetch()
-    })
-
-    /**
-     * Subscribe to network connect changes if needed.
-     */
-    unsubscribeConnectRefetch = onConnect(function () {
-      localRefetch()
-    })
-
-    /**
-     * Unsubscribes the current listeners to avoid memory leaks.
-     */
     onCleanup(function () {
-      localUnsubscribe()
+      clearInterval(interval)
     })
-  })
+
+    return [isAvailable, availableIn]
+  }
+
+  /**
+   * Returns the expiration date of the current key.
+   * If the item is not in the cache, it will return undefined.
+   */
+  function localExpiration(): Date | undefined {
+    const key = keyMemo()
+    if (!key) return undefined
+
+    return expiration(key)
+  }
+
+  /**
+   * Creates a signal that every given pricesion interval
+   * will determine if the current key is currently expired / stale
+   * and how many time needs to pass till its considered expired / stale.
+   * This function helps creating
+   * the controlled sigal on demand rather than creating
+   * arbitrary signals ourselves just in case.
+   * Return value is [isStale, staleIn]
+   */
+  function createStale(precision: number): [Accessor<boolean>, Accessor<number>] {
+    const now = new Date()
+    const initialKey = keyMemo()
+
+    let initialIsStale = true
+    let initialStaleIn = 0
+
+    if (initialKey) {
+      const expiresAt = expiration(initialKey)
+      if (expiresAt) {
+        const expirationIn = expiresAt.getTime() - now.getTime()
+        if (expirationIn >= 0) initialStaleIn = expirationIn
+        initialIsStale = expiresAt.getTime() < now.getTime()
+      }
+    }
+
+    const [isStale, setIsStale] = createSignal(initialIsStale)
+    const [staleIn, setStaleIn] = createSignal(initialStaleIn)
+
+    createEffect(
+      on(keyMemo, () => {
+        const key = keyMemo()
+        const interval = setInterval(function () {
+          if (!key) return
+          const expiresAt = expiration(key)
+          if (expiresAt) {
+            const now = new Date()
+            const expirationIn = expiresAt.getTime() - now.getTime()
+            if (expirationIn >= 0) setStaleIn(expirationIn)
+            else if (expirationIn < 0 && staleIn() > 0) setStaleIn(0)
+            setIsStale(expiresAt.getTime() < now.getTime())
+          }
+        }, precision)
+
+        onCleanup(function () {
+          clearInterval(interval)
+        })
+      })
+    )
+
+    return [isStale, staleIn]
+  }
+
+  createEffect(
+    on(keyMemo, () => {
+      setIsRefetching(false)
+      const key = keyMemo()
+      if (!key) return
+
+      /**
+       * Subscribes to mutations in the key.
+       */
+      unsubscribeMutations = subscribe<T>(key, 'mutated', function (item) {
+        if (transition) transition(() => actions.mutate(() => item))
+        else actions.mutate(() => item)
+      })
+
+      /**
+       * Subscribes to refetching on the key.
+       */
+      unsubscribeRefetching = subscribe<T>(key, 'refetching', function (promise) {
+        setIsRefetching(true)
+        if (!item.loading) {
+          if (transition) transition(() => actions.refetch(promise))
+          else actions.refetch(promise)
+        }
+      })
+
+      /**
+       * Subscribes to refetching on the key.
+       */
+      unsubscribeResolved = subscribe<T>(key, 'resolved', function () {
+        setIsRefetching(false)
+      })
+
+      /**
+       * Subscribe to errors.
+       */
+      unsubscribeErrors = subscribe<unknown>(key, 'error', function () {
+        setIsRefetching(false)
+      })
+
+      /**
+       * Subscribe to focus changes if needed.
+       */
+      unsubscribeFocusRefetch = onFocus(function () {
+        localRefetch()
+      })
+
+      /**
+       * Subscribe to network connect changes if needed.
+       */
+      unsubscribeConnectRefetch = onConnect(function () {
+        localRefetch()
+      })
+
+      /**
+       * Unsubscribes the current listeners to avoid memory leaks.
+       */
+      onCleanup(function () {
+        localUnsubscribe()
+      })
+    })
+  )
 
   /**
    * Forgets the current resource key.
@@ -335,6 +469,10 @@ export function createTurboResource<T = any>(
       forget: localForget,
       abort: localAbort,
       isRefetching,
+      lastFocus,
+      createFocusAvailable,
+      expiration: localExpiration,
+      createStale,
     },
   ]
 }

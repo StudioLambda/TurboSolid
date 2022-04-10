@@ -2,7 +2,7 @@
 
 > Lightweight asynchronous data management for solid
 
-**Documentation is in progress**. To know more check the `src/` folder. It contains enough readable information to get you started.
+## Installation
 
 ```
 npm i turbo-solid
@@ -10,7 +10,7 @@ npm i turbo-solid
 
 ## Features
 
-- 2.5KB (gzip)
+- Less than 3KB (gzip)
 - Same API as `createResource`.
 - Typescript support out of the box.
 - `<Suspense>` support.
@@ -23,6 +23,8 @@ npm i turbo-solid
 - Automatic refetching upon key change.
 - Data synchronization (using keys).
 - Keys can throw or return false/null if data is not yet ready.
+- Additional controls like `isRefetching` or `lastFocus`.
+- Additional optional signals like `isStale` or `isAvailable`.
 - All available options from [Turbo Query](https://github.com/StudioLambda/TurboQuery).
 
 ## Documentation
@@ -78,69 +80,62 @@ you can import `createTurboResource` from `turbo-solid`. The API is very similar
 import { For } from 'solid-js'
 import { createTurboResource } from 'turbo-solid'
 
-interface Post {
+interface ISimplePost {
   title: string
 }
 
 const Posts = () => {
-  const [post] = createTurboResource<Post>(() => 'https://jsonplaceholder.typicode.com/posts')
+  const [posts] = createTurboResource<ISimplePost[]>(
+    () => 'https://jsonplaceholder.typicode.com/posts'
+  )
 
-  return <For each={posts() ?? []}>{(post) => <div>{post.title}</div>}</For>
+  return (
+    <For each={posts() ?? []}>
+      <div>{post()!.title}</div>
+    </For>
+  )
 }
 ```
 
 Awesome! You can learn more about what controls and features you gain over `createResource` on the [Documentation](https://erik.cat/post/turbo-solid-lightweight-asynchronous-data-management-for-solid)
 
-## Full Example
+## Full Example (Post viewer)
+
+- Create a context with the configuration.
 
 ```tsx
-import { Component, Show } from 'solid-js'
-import { createTurboResource } from 'turbo-solid'
-
-interface User {
-  id: number
-  name: string
-}
-
-const PublishedBy: Component<{ userId: number }> = (props) => {
-  const [user] = createTurboResource<User>(
-    () => `https://jsonplaceholder.typicode.com/users/${props.userId}`
-  )
-
-  return <Show when={user()}>{(user) => <h4>Published by {user.name}</h4>}</Show>
-}
-
-interface Post {
-  id: number
-  userId: number
-  title: string
-  body: string
-}
-
-const Post: Component<{ id: number }> = (props) => {
-  const [post, { isRefetching }] = createTurboResource<Post>(
-    () => `https://jsonplaceholder.typicode.com/posts/${props.id}`
-  )
-
-  return (
-    <Show when={post()}>
-      {(post) => (
-        <div>
-          <Show when={isRefetching()}>
-            <div>Refetching...</div>
-          </Show>
-          <h1>{post.title}</h1>
-          <Suspense fallback={<div>Loading published information...</div>}>
-            <PublishedBy userId={post.userId} />
-          </Suspense>
-          <p>{post.body}</p>
-        </div>
-      )}
-    </Show>
-  )
-}
+// App.tsx
+import { TurboContext, Component } from 'turbo-solid'
+import PostSelector from './PostSelector'
+import { render } from 'solid-js/web'
 
 const App: Component = () => {
+  const configuration = {
+    async fetcher(key, { signal }) {
+      const response = await fetch(key, { signal })
+      if (!response.ok) throw new Error('Not a 4XX response')
+      return await response.json()
+    },
+  }
+
+  return (
+    <TurboContext.Provider value={configuration}>
+      <PostSelector />
+    </TurboContext.Provider>
+  )
+}
+
+render(() => <App />, document.getElementById('root'))
+```
+
+- Create a post selector view to determine what post to show
+
+```tsx
+// PostSelector.tsx
+import { Component, Show, Suspense } from 'solid-js'
+import Post from './Post'
+
+const PostSelector: Component = () => {
   const [current, setCurrent] = createSignal(1)
 
   return (
@@ -159,4 +154,72 @@ const App: Component = () => {
     </div>
   )
 }
+
+export default PostSelector
 ```
+
+- Create the Post component
+
+```tsx
+// Post.tsx
+import { Component, Show, Suspense } from 'solid-js'
+import { createTurboResource } from 'turbo-solid'
+
+interface IPost {
+  id: number
+  userId: number
+  title: string
+  body: string
+}
+
+const Post: Component<{ id: number }> = (props) => {
+  const [post, { isRefetching }] = createTurboResource<IPost>(
+    () => `https://jsonplaceholder.typicode.com/posts/${props.id}`
+  )
+
+  return (
+    <Show when={post()}>
+      <div>
+        <Show when={isRefetching()}>
+          <div>Refetching...</div>
+        </Show>
+        <h1>{post()!.title}</h1>
+        <Suspense fallback={<div>Loading published information...</div>}>
+          <PublishedBy userId={post()!.userId} />
+        </Suspense>
+        <p>{post()!.body}</p>
+      </div>
+    </Show>
+  )
+}
+
+export default Post
+```
+
+- Create the Published By component.
+
+```tsx
+import { Component, Show } from 'solid-js'
+import { createTurboResource } from 'turbo-solid'
+
+interface IUser {
+  id: number
+  name: string
+}
+
+const PublishedBy: Component<{ userId: number }> = (props) => {
+  const [user] = createTurboResource<IUser>(
+    () => `https://jsonplaceholder.typicode.com/users/${props.userId}`
+  )
+
+  return (
+    <Show when={user()}>
+      <h4>Published by {user()!.name}</h4>
+    </Show>
+  )
+}
+
+export default PublishedBy
+```
+
+You're done!
