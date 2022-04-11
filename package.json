@@ -25,7 +25,13 @@
     "email": "soc@erik.cat",
     "url": "https://erik.cat"
   },
-  "contributors": [],
+  "contributors": [
+    {
+      "name": "Erik C. Forés",
+      "email": "soc@erik.cat",
+      "url": "https://erik.cat"
+    }
+  ],
   "types": "./dist/turbo-solid.d.ts",
   "main": "./dist/turbo-solid.umd.js",
   "module": "./dist/turbo-solid.es.js",
