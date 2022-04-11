@@ -1,12 +1,15 @@
+![turbo-solid](https://assets.solidjs.com/banner?project=turbo-solid)
+
+<p align="center">
+  :warning: &nbsp;<b>The main branch in this repository will be stale during the duration of the solid hackathon</b> :warning:
+</p>
+<p align="center">
+  :warning: &nbsp;<a href="https://github.com/StudioLambda/TurboSolid/tree/next">Click here to visit the latest version</a> :warning:
+</p>
+
 # Turbo Solid
 
 > Lightweight asynchronous data management for solid
-
-## Installation
-
-```
-npm i turbo-solid
-```
 
 ## Features
 
@@ -30,6 +33,16 @@ npm i turbo-solid
 ## Documentation
 
 While this doucment highlights some basics, it's recommended to read the [Documentation](https://erik.cat/post/turbo-solid-lightweight-asynchronous-data-management-for-solid)
+
+## Playground
+
+Play with a few of the features at [Turbo Solid](https://turbo-solid.erik.cat)
+
+## Installation
+
+```
+npm i turbo-solid
+```
 
 ## Walk-Through
 
