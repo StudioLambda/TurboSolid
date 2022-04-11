@@ -1,3 +1,5 @@
+![turbo-solid](https://assets.solidjs.com/banner?project=turbo-solid)
+
 # Turbo Solid
 
 > Lightweight asynchronous data management for solid
