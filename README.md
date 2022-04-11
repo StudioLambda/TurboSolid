@@ -4,12 +4,6 @@
 
 > Lightweight asynchronous data management for solid
 
-## Installation
-
-```
-npm i turbo-solid
-```
-
 ## Features
 
 - Less than 3KB (gzip)
@@ -32,6 +26,16 @@ npm i turbo-solid
 ## Documentation
 
 While this doucment highlights some basics, it's recommended to read the [Documentation](https://erik.cat/post/turbo-solid-lightweight-asynchronous-data-management-for-solid)
+
+## Playground
+
+Play with a few of the features at [Turbo Solid](https://turbo-solid.erik.cat)
+
+## Installation
+
+```
+npm i turbo-solid
+```
 
 ## Walk-Through
 
