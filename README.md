@@ -1,5 +1,12 @@
 ![turbo-solid](https://assets.solidjs.com/banner?project=turbo-solid)
 
+<p align="center">
+  :warning: &nbsp;<b>The main branch in this repository will be stale during the duration of the solid hackathon</b> :warning:
+</p>
+<p align="center">
+  :warning: &nbsp;<a href="https://github.com/StudioLambda/TurboSolid/tree/next">Click here to visit the latest version</a> :warning:
+</p>
+
 # Turbo Solid
 
 > Lightweight asynchronous data management for solid
