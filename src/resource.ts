@@ -8,6 +8,7 @@ import {
   forget as turboForget,
   abort as turboAbort,
   expiration as turboExpiration,
+  hydrate as turboHydrate,
 } from 'turbo-query'
 
 import {
@@ -22,6 +23,7 @@ import {
   createSignal,
   Accessor,
   on,
+  ResourceFetcherInfo,
 } from 'solid-js'
 
 /**
@@ -58,6 +60,27 @@ export interface TurboSolidResourceOptions extends TurboQueryOptions {
    * `refetchOnFocus`. Defaults to 5000 ms.
    */
   readonly focusInterval?: number
+
+  /**
+   * Resource Deferred Streaming.
+   *
+   * We now have the ability to tell Solid's stream renderer
+   * to wait for a resource before flushing the stream.
+   *
+   * When this happens the stream and the response
+   * will be held allowing the server to process what
+   * it needs to before sending the status and
+   * streaming back the response. This is also valuable
+   * if there is some high-priority content that is
+   * worth waiting for before sending the response.
+   */
+  readonly deferStream?: boolean
+
+  /**
+   * Clears the resource signal by setting it to
+   * undefined when the key is forgotten from the cache.
+   */
+  readonly clearOnForget?: boolean
 }
 
 /**
@@ -198,20 +221,44 @@ export function createTurboResource<T = any>(
   const mutate = options?.turbo?.mutate ?? contextOptions?.turbo?.mutate ?? turboMutate
   const forget = options?.turbo?.forget ?? contextOptions?.turbo?.forget ?? turboForget
   const abort = options?.turbo?.abort ?? contextOptions?.turbo?.abort ?? turboAbort
+  const hydrate = options?.turbo?.hydrate ?? contextOptions?.turbo?.hydrate ?? turboHydrate
   const transition = getTransition(options?.transition ?? contextOptions?.transition)
   const refetchOnFocus = options?.refetchOnFocus ?? contextOptions?.refetchOnFocus ?? true
   const refetchOnConnect = options?.refetchOnConnect ?? contextOptions?.refetchOnConnect ?? true
   const focusInterval = options?.focusInterval ?? contextOptions?.focusInterval ?? 5000
   const expiration =
     options?.turbo?.expiration ?? contextOptions?.turbo?.expiration ?? turboExpiration
+  const deferStream = options?.deferStream ?? contextOptions?.deferStream ?? undefined
+  const clearOnForget = options?.clearOnForget ?? contextOptions?.clearOnForget ?? false
+
+  /**
+   * The fetcher of the resource.
+   */
+  function fetcher(k: string, { refetching }: ResourceFetcherInfo<T>) {
+    return refetching instanceof Promise
+      ? (refetching as Promise<T>)
+      : query<T>(k, { stale: true, ...contextOptions, ...options })
+  }
+
+  /**
+   * The hydration function will ensure that the
+   * cache is populated correctly after SSR.
+   */
+  function onHydrated<S = string, K = T>(k: S, { value }: ResourceFetcherInfo<K>) {
+    if (value) {
+      const expiration = options?.expiration ?? contextOptions?.expiration
+      const expiresAt = new Date()
+      expiresAt.setMilliseconds(expiresAt.getMilliseconds() + (expiration?.(value) ?? 0))
+      hydrate(k as unknown as string, value, expiresAt)
+    }
+  }
 
   /**
    * Creates the underlying async resource.
    */
-  const [item, actions] = createResource<T, string>(keyMemo, function (k, { refetching }) {
-    return refetching instanceof Promise
-      ? (refetching as Promise<T>)
-      : query<T>(k, { stale: true, ...contextOptions, ...options })
+  const [item, actions] = createResource<T, string>(keyMemo, fetcher, {
+    onHydrated,
+    deferStream,
   })
 
   /**
@@ -240,6 +287,7 @@ export function createTurboResource<T = any>(
 
   let unsubscribeMutations: undefined | (() => void) = undefined
   let unsubscribeRefetching: undefined | (() => void) = undefined
+  let unsubscribeForgotten: undefined | (() => void) = undefined
   let unsubscribeFocusRefetch: undefined | (() => void) = undefined
   let unsubscribeConnectRefetch: undefined | (() => void) = undefined
   let unsubscribeResolved: undefined | (() => void) = undefined
@@ -255,6 +303,7 @@ export function createTurboResource<T = any>(
     unsubscribeRefetching?.()
     unsubscribeFocusRefetch?.()
     unsubscribeConnectRefetch?.()
+    unsubscribeForgotten?.()
     unsubscribeResolved?.()
     unsubscribeErrors?.()
   }
@@ -357,8 +406,7 @@ export function createTurboResource<T = any>(
     const [staleIn, setStaleIn] = createSignal(initialStaleIn)
 
     createEffect(
-      on(keyMemo, () => {
-        const key = keyMemo()
+      on(keyMemo, (key) => {
         const interval = setInterval(function () {
           if (!key) return
           const expiresAt = expiration(key)
@@ -381,9 +429,8 @@ export function createTurboResource<T = any>(
   }
 
   createEffect(
-    on(keyMemo, () => {
+    on(keyMemo, (key) => {
       setIsRefetching(false)
-      const key = keyMemo()
       if (!key) return
 
       /**
@@ -417,6 +464,13 @@ export function createTurboResource<T = any>(
        */
       unsubscribeErrors = subscribe<unknown>(key, 'error', function () {
         setIsRefetching(false)
+      })
+
+      /**
+       * Subscribe to forgets.
+       */
+      unsubscribeForgotten = subscribe<T>(key, 'forgotten', function () {
+        if (clearOnForget) actions.mutate(() => undefined)
       })
 
       /**
