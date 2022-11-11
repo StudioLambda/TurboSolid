@@ -1,5 +1,6 @@
 import { Component, Suspense, ErrorBoundary } from 'solid-js'
-import PostView from './PostView'
+// import PostView from './PostView'
+import Test from './Test'
 // import SinglePost from './SinglePost'
 
 interface ErrorProps {
@@ -20,7 +21,8 @@ const App: Component = () => {
   return (
     <ErrorBoundary fallback={(error, retry) => <Issue error={error} retry={retry} />}>
       <Suspense fallback={<div>Loading...</div>}>
-        <PostView />
+        <Test />
+        {/* <PostView /> */}
         {/* <SinglePost id={1} /> */}
       </Suspense>
     </ErrorBoundary>

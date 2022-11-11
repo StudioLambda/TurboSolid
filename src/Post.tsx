@@ -27,10 +27,12 @@ const TurboPost: Component<Props> = (props) => {
 
   return (
     <div>
-      <Show when={post()}>
+      <Show when={post()} keyed>
         {(post) => (
           <>
-            <Show when={user()}>{(user) => <p>{user.name}</p>}</Show>
+            <Show when={user()} keyed>
+              {(user) => <p>{user.name}</p>}
+            </Show>
             <h3>{post.title}</h3>
             <p>{post.body}</p>
             <button onClick={() => refetch()}>Refresh</button>

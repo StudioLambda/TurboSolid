@@ -19,7 +19,7 @@ const TurboPost: Component<Props> = (props) => {
 
   return (
     <div>
-      <Show when={post()}>
+      <Show when={post()} keyed>
         {(post) => (
           <>
             <Show when={isRefetching()}>

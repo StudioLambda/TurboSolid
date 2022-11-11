@@ -244,12 +244,12 @@ export function createTurboResource<T = any>(
    * The hydration function will ensure that the
    * cache is populated correctly after SSR.
    */
-  function onHydrated<S = string, K = T>(k: S, { value }: ResourceFetcherInfo<K>) {
-    if (value) {
+  function onHydrated(k: string | undefined, { value }: { value: T | undefined }) {
+    if (k && value) {
       const expiration = options?.expiration ?? contextOptions?.expiration
       const expiresAt = new Date()
       expiresAt.setMilliseconds(expiresAt.getMilliseconds() + (expiration?.(value) ?? 0))
-      hydrate(k as unknown as string, value, expiresAt)
+      hydrate(k, value, expiresAt)
     }
   }
 
