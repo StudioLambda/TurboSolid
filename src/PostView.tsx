@@ -58,7 +58,7 @@ const PostView: Component = () => {
         onInput={(e) => setCurrent(parseInt(e.currentTarget.value))}
       />
       <Suspense fallback={<div>Loading post...</div>}>
-        <Show when={current() !== NaN}>
+        <Show when={!Number.isNaN(current())}>
           <Post id={current()} />
         </Show>
       </Suspense>
